@@ -2,7 +2,6 @@ package com.avinash.kvstore.store;
 
 import com.avinash.kvstore.model.ValueWrapper;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
