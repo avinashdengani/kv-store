@@ -3,9 +3,11 @@ package com.avinash.kvstore.store;
 import com.avinash.kvstore.model.ValueWrapper;
 
 import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class KVStore {
-    private final HashMap<String, ValueWrapper> store = new HashMap<>();
+    private final Map<String, ValueWrapper> store = new ConcurrentHashMap<>();
 
     public void set(String key, String value, long ttlMillis) {
         store.put(key, new ValueWrapper(value, ttlMillis));
