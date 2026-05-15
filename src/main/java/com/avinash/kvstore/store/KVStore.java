@@ -28,4 +28,9 @@ public class KVStore {
     public int size() {
         return store.size();
     }
+
+    // Expose store for ExpiryManager
+    public Map<String, ValueWrapper> getStore() {
+        return store;
+    }
 }
