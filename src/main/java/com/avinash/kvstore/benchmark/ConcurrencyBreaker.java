@@ -31,6 +31,11 @@ public class ConcurrencyBreaker {
         for (int i = 0; i < 5; i++) {
             runBreaker("Trial " + (i + 1), StoreFactory.create(StoreFactory.StoreType.CONCURRENT), threadCount, keysPerThread);
         }
+
+        System.out.println("\n--- ReentrantReadWriteLock ---");
+        for (int i = 0; i < 5; i++) {
+            runBreaker("Trial " + (i + 1), StoreFactory.create(StoreFactory.StoreType.READ_WRITE), threadCount, keysPerThread);
+        }
     }
 
     public static void runBreaker(String label, KVStore kvStore,

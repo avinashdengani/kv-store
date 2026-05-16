@@ -3,6 +3,8 @@ package com.avinash.kvstore.benchmark;
 
 import com.avinash.kvstore.store.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -10,41 +12,45 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class ConcurrentBenchmark {
 
-    public static void runAll(int threadCount, int opsPerThread) throws InterruptedException {
+    public static List<BenchmarkResult> runAll(int threadCount,
+                                                         int opsPerThread) {
 
-        runBenchmark(StoreFactory.StoreType.CONCURRENT.name(), StoreFactory.create(StoreFactory.StoreType.CONCURRENT), threadCount, opsPerThread);
-        Thread.sleep(500);
+        List<BenchmarkResult> results = new ArrayList<>();
 
-        runBenchmark(StoreFactory.StoreType.SYNCHRONIZED.name(), StoreFactory.create(StoreFactory.StoreType.SYNCHRONIZED), threadCount, opsPerThread);
-        Thread.sleep(500);
+        StoreFactory.StoreType[] storeTypes = StoreFactory.StoreType.values();
 
-        runBenchmark(StoreFactory.StoreType.NAIVE.name(), StoreFactory.create(StoreFactory.StoreType.NAIVE), threadCount, opsPerThread);
-        Thread.sleep(500);
+        for (StoreFactory.StoreType storeType : storeTypes) {
+
+            try {
+
+                results.add(
+                        runBenchmark(
+                                storeType.name(),
+                                StoreFactory.create(storeType),
+                                threadCount,
+                                opsPerThread
+                        )
+                );
+
+                Thread.sleep(500);
+
+            } catch (Exception e) {
+                System.out.println("Exception: " + e.getMessage());
+            }
+        }
+
+        return results;
     }
 
-    private static void runBenchmark(String label, KVStore kvStore,
+    public static BenchmarkResult runBenchmark(String label, KVStore kvStore,
                                     int threadCount, int opsPerThread)
             throws InterruptedException {
 
-        // Internal warmup for this specific store
+        // Pre-populate — MUST happen before threads start
         for (int i = 0; i < 10; i++) {
             kvStore.set("key" + i, "value" + i, -1);
         }
-        // Small warmup run
-        ExecutorService warmupExecutor = Executors.newFixedThreadPool(10);
-        CountDownLatch warmupLatch = new CountDownLatch(10);
-        for (int t = 0; t < 10; t++) {
-            warmupExecutor.submit(() -> {
-                for (int i = 0; i < 1000; i++) {
-                    kvStore.get("key" + (i % 100));
-                }
-                warmupLatch.countDown();
-            });
-        }
-        warmupLatch.await();
-        warmupExecutor.shutdown();
 
-        // Now actual benchmark
         AtomicInteger successfulReads = new AtomicInteger(0);
         AtomicInteger successfulWrites = new AtomicInteger(0);
         AtomicInteger unexpectedNulls = new AtomicInteger(0);
@@ -81,32 +87,15 @@ public class ConcurrentBenchmark {
         latch.await();
         executor.shutdown();
 
-        long elapsed = System.currentTimeMillis() - start;
-        long totalOps = (long) threadCount * opsPerThread;
+        long elapsed    = System.currentTimeMillis() - start;
+        long totalOps   = (long) threadCount * opsPerThread;
         long throughput = totalOps * 1000L / elapsed;
+        int finalSize  = kvStore.size();
+        boolean corrupted = finalSize != 10 || unexpectedNulls.get() > 0;
 
-        System.out.println("--- " + label + " ---");
-        System.out.println("Threads      : " + threadCount);
-        System.out.println("Total ops    : " + totalOps);
-        System.out.println("Reads        : " + successfulReads.get());
-        System.out.println("Writes       : " + successfulWrites.get());
-        System.out.println("Time         : " + elapsed + "ms");
-        System.out.println("Throughput   : " + throughput + " ops/sec");
-
-        // Validation — catch silent corruption
-        int finalSize = kvStore.size();
-        System.out.println("Final store size : " + finalSize);
-        System.out.println("Expected max size: 10");
-        System.out.println("Corruption check : " + (finalSize == 10 ? "✓ CLEAN" : "✗ CORRUPTED — data lost silently"));
-        System.out.println("Unexpected nulls : " + unexpectedNulls.get() +
-                (unexpectedNulls.get() > 0 ? " ✗ CORRUPTION DETECTED" : " ✓ NONE"));
-        System.out.println();
-
-        // Sample value check
-        System.out.println("Sample reads after benchmark:");
-        for (int i = 0; i < 5; i++) {
-            String val = kvStore.get("key" + i);
-            System.out.println("  key" + i + " → " + (val != null ? val : "NULL (missing!)"));
-        }
-        System.out.println();
+        // Return result object
+        return new BenchmarkResult(
+                label, throughput, unexpectedNulls.get(),
+                corrupted, elapsed, finalSize
+        );
     }}
