@@ -1,6 +1,7 @@
 package com.avinash.kvstore;
 
 import com.avinash.kvstore.benchmark.BenchmarkResult;
+import com.avinash.kvstore.benchmark.BreakerResult;
 import com.avinash.kvstore.benchmark.ConcurrencyBreaker;
 import com.avinash.kvstore.benchmark.ConcurrentBenchmark;
 
@@ -14,11 +15,12 @@ public class Main {
         int threadCount = 50;
         int opsPerThread = 1000;
 
-        List<BenchmarkResult> results = ConcurrentBenchmark.runAll(threadCount, opsPerThread);
-        BenchmarkResult.printSummary(results);
+        List<BenchmarkResult> benchmarkResults = ConcurrentBenchmark.runAll(threadCount, opsPerThread);
+        BenchmarkResult.printSummary(benchmarkResults);
 
         Thread.sleep(1500);
-        ConcurrencyBreaker.runAll(threadCount, opsPerThread);
+        List<BreakerResult> breakerResults =ConcurrencyBreaker.runAll(threadCount, opsPerThread);
+        BreakerResult.printSummary(breakerResults);
 
     }
 }

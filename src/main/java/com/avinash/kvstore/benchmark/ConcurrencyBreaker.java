@@ -3,6 +3,8 @@ package com.avinash.kvstore.benchmark;
 import com.avinash.kvstore.expiry.ExpiryManager;
 import com.avinash.kvstore.store.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -10,35 +12,74 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class ConcurrencyBreaker {
 
-    public static void runAll(int threadCount, int keysPerThread) throws InterruptedException {
+    public static List<BreakerResult> runAll(int threadCount, int keysPerThread) throws InterruptedException {
         System.out.println("=== Concurrency Breaker ===\n");
         System.out.println("Strategy: Concurrent writes + ExpiryManager sweeping simultaneously");
         System.out.println("Each thread writes UNIQUE keys with short TTL");
         System.out.println("Sweeper evicts while writers are still inserting\n");
         System.out.println("Running 5 trials per implementation...\n");
 
-        System.out.println("--- Naive HashMap ---");
-        for (int i = 0; i < 5; i++) {
-            runBreaker("Trial " + (i + 1), StoreFactory.create(StoreFactory.StoreType.NAIVE), threadCount, keysPerThread);
+        List<BreakerResult> results = new ArrayList<>();
+
+        for (StoreFactory.StoreType type : StoreFactory.StoreType.values()) {
+            System.out.println("--- " + type.name() + " ---");
+            results.add(runTrials(type.name(),
+                    type, 5, threadCount, keysPerThread));
+            System.out.println();
+        }
+        return results;
+    }
+
+    private static BreakerResult runTrials(String label,
+                                           StoreFactory.StoreType type,
+                                           int trials,
+                                           int threadCount,
+                                           int keysPerThread)
+            throws InterruptedException {
+
+        int totalCorrupted       = 0;
+        long totalLost           = 0;
+        int totalWriterExc       = 0;
+        int totalSweeperExc      = 0;
+
+        for (int i = 0; i < trials; i++) {
+            TrialResult trial = runBreaker(
+                    "Trial " + (i + 1),
+                    StoreFactory.create(type),
+                    threadCount,
+                    keysPerThread
+            );
+
+            if (trial.corrupted) {
+                totalCorrupted++;
+            }
+
+            totalLost       += trial.keysLost;
+            totalWriterExc  += trial.writerExceptions;
+            totalSweeperExc += trial.sweeperExceptions;
         }
 
-        System.out.println("\n--- Synchronized HashMap ---");
-        for (int i = 0; i < 5; i++) {
-            runBreaker("Trial " + (i + 1), StoreFactory.create(StoreFactory.StoreType.SYNCHRONIZED), threadCount, keysPerThread);
-        }
+        return new BreakerResult(label, trials, totalCorrupted,
+                totalLost, totalWriterExc, totalSweeperExc);
+    }
 
-        System.out.println("\n--- ConcurrentHashMap ---");
-        for (int i = 0; i < 5; i++) {
-            runBreaker("Trial " + (i + 1), StoreFactory.create(StoreFactory.StoreType.CONCURRENT), threadCount, keysPerThread);
-        }
+    // Internal result per trial — not exposed outside
+    private static class TrialResult {
+        final boolean corrupted;
+        final long keysLost;
+        final int writerExceptions;
+        final int sweeperExceptions;
 
-        System.out.println("\n--- ReentrantReadWriteLock ---");
-        for (int i = 0; i < 5; i++) {
-            runBreaker("Trial " + (i + 1), StoreFactory.create(StoreFactory.StoreType.READ_WRITE), threadCount, keysPerThread);
+        TrialResult(boolean corrupted, long keysLost,
+                    int writerExceptions, int sweeperExceptions) {
+            this.corrupted         = corrupted;
+            this.keysLost          = keysLost;
+            this.writerExceptions  = writerExceptions;
+            this.sweeperExceptions = sweeperExceptions;
         }
     }
 
-    public static void runBreaker(String label, KVStore kvStore,
+    private static TrialResult runBreaker(String label, KVStore kvStore,
                                   int threadCount, int keysPerThread)
             throws InterruptedException {
 
@@ -80,22 +121,13 @@ public class ConcurrencyBreaker {
         // Stop sweeper
         expiryManager.stop();
 
-        int actualSize = kvStore.size();
-        boolean corrupted = actualSize != expectedSize;
-        boolean hadExceptions = exceptionCount.get() > 0;
-        boolean sweeperFailed = sweeperExceptions.get() > 0;
+        int actualSize   = kvStore.size();
+        long keysLost    = expectedSize - actualSize;
+        boolean corrupted = actualSize != expectedSize
+                || exceptionCount.get() > 0
+                || sweeperExceptions.get() > 0;
 
-        System.out.printf(
-                "  %s | Expected: %d | Actual: %d | Lost: %d | " +
-                        "Writer Exceptions: %d | Sweeper Exceptions: %d | %s%n",
-                label,
-                expectedSize,
-                actualSize,
-                expectedSize - actualSize,
-                exceptionCount.get(),
-                sweeperExceptions.get(),
-                (corrupted || hadExceptions || sweeperFailed)
-                        ? "✗ CORRUPTED" : "✓ CLEAN"
-        );
+        return new TrialResult(corrupted, keysLost,
+                exceptionCount.get(), sweeperExceptions.get());
     }
 }

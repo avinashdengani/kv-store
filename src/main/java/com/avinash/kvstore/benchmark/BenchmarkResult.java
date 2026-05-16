@@ -60,15 +60,5 @@ public class BenchmarkResult {
                     r.isCorrupted() ? "✗ CORRUPT" : "✓ CLEAN");
         }
         System.out.println("─".repeat(80));
-
-        // Best throughput among clean stores
-        results.stream()
-                .filter(r -> !r.isCorrupted())
-                .max((a, b) -> Long.compare(a.getThroughput(), b.getThroughput()))
-                .ifPresent(best ->
-                        System.out.println("\n🏆 Best clean implementation: "
-                                + best.getLabel()
-                                + " at " + best.getThroughput() + " ops/sec")
-                );
     }
 }
