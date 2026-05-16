@@ -4,7 +4,8 @@ public class StoreFactory {
     public enum StoreType {
         NAIVE,
         SYNCHRONIZED,
-        CONCURRENT
+        CONCURRENT,
+        READ_WRITE
     }
 
     public static KVStore create(StoreType type) {
@@ -12,7 +13,8 @@ public class StoreFactory {
             case NAIVE -> new NaiveKVStore();
             case SYNCHRONIZED -> new SynchronizedKVStore();
             case CONCURRENT -> new ConcurrentKVStore();
-            default -> throw new IllegalArgumentException("Unknown store type: " + type);
+            case READ_WRITE -> new ReadWriteKVStore();
+                default -> throw new IllegalArgumentException("Unknown store type: " + type);
         };
     }
 
