@@ -35,7 +35,9 @@ public class ConcurrentBenchmark {
                 Thread.sleep(500);
 
             } catch (Exception e) {
-                System.out.println("Exception: " + e.getMessage());
+                System.err.println("Benchmark failed for " + storeType.name()
+                        + ": " + e.getMessage());
+                e.printStackTrace();
             }
         }
 
